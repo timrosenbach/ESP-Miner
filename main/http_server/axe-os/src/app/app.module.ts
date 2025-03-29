@@ -31,7 +31,6 @@ import { TooltipModule } from 'primeng/tooltip';
 import { DialogModule } from 'primeng/dialog';
 import { DynamicDialogModule, DialogService as PrimeDialogService } from 'primeng/dynamicdialog';
 import { DialogService, DialogListComponent } from './services/dialog.service';
-import { SuffixNumberPipe } from './pipes/suffix-number.pipe';
 
 const components = [
   AppComponent,
@@ -57,8 +56,7 @@ const components = [
     ThemeConfigComponent,
     DesignComponent,
     PoolComponent,
-    DialogListComponent,
-    SuffixNumberPipe
+    DialogListComponent
   ],
   imports: [
     BrowserModule,
