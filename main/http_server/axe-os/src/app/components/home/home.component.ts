@@ -3,6 +3,7 @@ import { interval, map, Observable, shareReplay, startWith, switchMap, tap } fro
 import { HashSuffixPipe } from 'src/app/pipes/hash-suffix.pipe';
 import { SystemService } from 'src/app/services/system.service';
 import { ThemeService } from 'src/app/services/theme.service';
+import { MiningData, MempoolService } from 'src/app/services/mempool.service';
 import { ISystemInfo } from 'src/models/ISystemInfo';
 
 
@@ -17,6 +18,7 @@ export class HomeComponent {
   public quickLink$!: Observable<string | undefined>;
   public fallbackQuickLink$!: Observable<string | undefined>;
   public expectedHashRate$!: Observable<number | undefined>;
+  public mempoolData$!: Observable<MiningData>;
 
 
   public chartOptions: any;
@@ -33,13 +35,19 @@ export class HomeComponent {
 
   constructor(
     private systemService: SystemService,
-    private themeService: ThemeService
+    private themeService: ThemeService,
+    private mempoolService: MempoolService
   ) {
     this.initializeChart();
 
     // Subscribe to theme changes
     this.themeService.getThemeSettings().subscribe(() => {
       this.updateChartColors();
+    });
+
+    // Fetch mining data from mempool.space
+    this.mempoolService.getMiningData().subscribe(() => {
+      this.mempoolData$ = this.mempoolService.getMiningData();
     });
   }
 
