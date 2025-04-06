@@ -78,7 +78,9 @@ components:
         - asicCount
         - autofanspeed
         - bestDiff
+        - bestNonceDiff
         - bestSessionDiff
+        - bestSessionNonceDiff
         - boardVersion
         - coreVoltage
         - coreVoltageActual
