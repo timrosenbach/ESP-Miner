@@ -5,6 +5,12 @@ import { MiningPool } from './mining-pool.interface';
   providedIn: 'root'
 })
 export class PublicPoolService implements MiningPool {
+
+  label = 'Public Pool';
+
+  protected stratumUrl = 'public-pool.io';
+  protected stratumPort = 21496;
+  protected webinterfaceUrl = 'https://web.public-pool.io/#/app/';
   
   private readonly explanations: Record<string, string> = {
     'Subscription validation error': 'The miner’s subscription request was invalid or malformed.',
@@ -17,8 +23,15 @@ export class PublicPoolService implements MiningPool {
     'Difficulty too low': 'The submitted share does not meet the minimum required difficulty.',
   };
 
+  getStratumPort(): number {
+    return this.stratumPort;
+  }
+  getStratumUrl(): string {
+    return this.stratumUrl;
+  }
+
   canHandle(url: string): boolean {
-    return url.includes('public-pool.io');
+    return url.includes(this.stratumUrl);
   }
   
   getRejectionExplanation(reason: string): string | null {
@@ -26,7 +39,7 @@ export class PublicPoolService implements MiningPool {
   }
   
   getQuickLink(_: string, stratumUser: string): string | undefined {
-    const address = stratumUser.split('.')[0];
-    return `https://web.public-pool.io/#/app/${address}`;
+    const [address] = stratumUser.split('.');
+    return `${this.webinterfaceUrl}${address}`;
   }
 }

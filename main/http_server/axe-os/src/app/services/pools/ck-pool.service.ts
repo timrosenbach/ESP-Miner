@@ -5,6 +5,14 @@ import { MiningPool } from './mining-pool.interface';
   providedIn: 'root',
 })
 export class CkPoolService implements MiningPool {
+
+  label = 'CK-Pool';
+
+  protected stratumUrl = 'solo.ckpool.org';
+  protected stratumPort = 3333;
+  protected webinterfaceUrl = 'https://solostats.ckpool.org';
+  protected readonly ckpoolRegex = /^solo[46]?\.ckpool\.org/i;
+
   private readonly explanations: Record<string, string> = {
     'Invalid nonce2 length': 'The nonce2 value does not match the expected length for this mining job.',
     'Worker mismatch': 'The worker name sent does not match the expected or authenticated worker.',
@@ -24,7 +32,12 @@ export class CkPoolService implements MiningPool {
     'Invalid version mask': 'The version mask provided was invalid for this job.',
   };
 
-  private readonly ckpoolRegex = /^(eusolo[46]?|solo[46]?)\.ckpool\.org/i;
+  getStratumPort(): number {
+    return this.stratumPort;
+  }
+  getStratumUrl(): string {
+    return this.stratumUrl;
+  }
 
   canHandle(url: string): boolean {
     return this.ckpoolRegex.test(url);
@@ -37,8 +50,9 @@ export class CkPoolService implements MiningPool {
   getQuickLink(stratumURL: string, stratumUser: string): string | undefined {
     const match = stratumURL.match(this.ckpoolRegex);
     if (!match) return undefined;
-
-    const region = match[1]; // e.g., 'eusolo4', 'solo6'
-    return `https://${region}.ckpool.org/users/${encodeURIComponent(stratumUser)}`;
+  
+    const [address] = stratumUser.split('.');
+    return `${this.webinterfaceUrl}/users/${encodeURIComponent(address)}`;
   }
+  
 }

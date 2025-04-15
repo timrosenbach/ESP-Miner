@@ -5,6 +5,13 @@ import { MiningPool } from './mining-pool.interface';
   providedIn: 'root',
 })
 export class GenericPoolService implements MiningPool {
+  getStratumPort(): number {
+    throw new Error('Method not implemented.');
+  }
+  getStratumUrl(): string {
+    throw new Error('Method not implemented.');
+  }
+  
   canHandle(_: string): boolean {
     // This generic service matches any stratumURL
     return true;

@@ -5,12 +5,10 @@ import { PublicPoolService } from './public-pool.service';
   providedIn: 'root'
 })
 export class NerdminerPoolService extends PublicPoolService {
-  override canHandle(url: string): boolean {
-    return url.includes('pool.nerdminer.de');
-  }
-  
-  override getQuickLink(_: string, stratumUser: string): string | undefined {
-    const address = stratumUser.split('.')[0];
-    return `https://pool.nerdminer.de/#/app/${address}`;
-  }
+
+  override readonly label = 'Nerdminer.de Pool';
+
+  override readonly stratumUrl = 'pool.nerdminer.de';
+  override readonly stratumPort = 3333;
+  override readonly webinterfaceUrl = 'https://pool.nerdminer.de/#/app/';
 }

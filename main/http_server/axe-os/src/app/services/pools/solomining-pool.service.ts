@@ -5,12 +5,10 @@ import { PublicPoolService } from './public-pool.service';
   providedIn: 'root'
 })
 export class SolominingPoolService extends PublicPoolService {
-  override canHandle(url: string): boolean {
-    return url.includes('pool.solomining.de');
-  }
-  
-  override getQuickLink(_: string, stratumUser: string): string | undefined {
-    const address = stratumUser.split('.')[0];
-    return `https://pool.solomining.de/#/app/${address}`;
-  }
+
+  override readonly label = 'Solomining.de Pool';
+
+  override readonly stratumUrl = 'pool.solomining.de';
+  override readonly stratumPort = 3333;
+  override readonly webinterfaceUrl = 'https://pool.solomining.de/#/app/';
 }
