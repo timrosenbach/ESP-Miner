@@ -812,19 +812,25 @@ static esp_err_t PATCH_set_mining_state(httpd_req_t *req)
 
     esp_err_t result;
     if (enable) {
-        // Hopefully set VCore back to defaults
+        // Reinitialize Voltage Regulator
         result = VCORE_init(GLOBAL_STATE);
         if (result == ESP_OK) {
-            // Reinitialize ASIC
-            if (ASIC_init(GLOBAL_STATE) == 0) {
-                GLOBAL_STATE->SYSTEM_MODULE.asic_status = "Chip count 0";
-                ESP_LOGE(TAG, "ASIC reinit failed");
-                result = ESP_FAIL;
-            } else {
-                SERIAL_set_baud(ASIC_set_max_baud(GLOBAL_STATE));
-                SERIAL_clear_buffer();
-                GLOBAL_STATE->ASIC_initalized = true;
-                ESP_LOGI(TAG, "ASIC reinitialized successfully");
+            // Reapply voltage settings
+            float target_voltage = nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0f;
+            result = VCORE_set_voltage(target_voltage, GLOBAL_STATE);
+
+            // Reinitalize ASIC
+            if (result == ESP_OK) {
+                if (ASIC_init(GLOBAL_STATE) == 0) {
+                    GLOBAL_STATE->SYSTEM_MODULE.asic_status = "Chip count 0";
+                    ESP_LOGE(TAG, "ASIC reinit failed");
+                    result = ESP_FAIL;
+                } else {
+                    SERIAL_set_baud(ASIC_set_max_baud(GLOBAL_STATE));
+                    SERIAL_clear_buffer();
+                    GLOBAL_STATE->ASIC_initalized = true;
+                    ESP_LOGI(TAG, "ASIC reinitialized successfully");
+                }
             }
         }
     } else {
