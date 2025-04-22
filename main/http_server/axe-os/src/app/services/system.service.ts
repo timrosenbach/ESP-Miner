@@ -74,6 +74,10 @@ export class SystemService {
     }
   }
 
+  public updateMiningState(uri: string = '', miningProps: any ) {
+    return this.httpClient.patch(`${uri}/api/system/mining`, miningProps);
+  }
+
   public restart(uri: string = '') {
     return this.httpClient.post(`${uri}/api/system/restart`, {}, {responseType: 'text'});
   }

@@ -778,6 +778,70 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
     return ESP_OK;
 }
 
+static esp_err_t PATCH_set_mining_state(httpd_req_t *req)
+{
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+
+    char buf[100];
+    int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
+    if (ret <= 0) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid request");
+    }
+    buf[ret] = '\0';
+
+    cJSON *root = cJSON_Parse(buf);
+    if (!root) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+    }
+
+    cJSON *enabled_item = cJSON_GetObjectItem(root, "enabled");
+    if (!cJSON_IsBool(enabled_item)) {
+        cJSON_Delete(root);
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "`enabled` must be true or false");
+    }
+
+    bool enable = cJSON_IsTrue(enabled_item);
+    ESP_LOGI(TAG, "PATCH /api/mining: %s", enable ? "enable" : "disable");
+
+    esp_err_t result;
+    if (enable) {
+        // Hopefully set VCore back to defaults
+        result = VCORE_init(GLOBAL_STATE);
+        if (result == ESP_OK) {
+            // Reinitialize ASIC
+            if (ASIC_init(GLOBAL_STATE) == 0) {
+                GLOBAL_STATE->SYSTEM_MODULE.asic_status = "Chip count 0";
+                ESP_LOGE(TAG, "ASIC reinit failed");
+                result = ESP_FAIL;
+            } else {
+                SERIAL_set_baud(ASIC_set_max_baud(GLOBAL_STATE));
+                SERIAL_clear_buffer();
+                GLOBAL_STATE->ASIC_initalized = true;
+                ESP_LOGI(TAG, "ASIC reinitialized successfully");
+            }
+        }
+    } else {
+        result = Power_disable(GLOBAL_STATE);
+    }
+
+    cJSON_Delete(root);
+
+    if (result != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to change mining state");
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_sendstr(req, "{\"status\":\"ok\"}");
+    return ESP_OK;
+}
+
 int log_to_queue(const char * format, va_list args)
 {
     va_list args_copy;
@@ -990,6 +1054,22 @@ esp_err_t start_rest_server(void * pvParameters)
         .user_ctx = NULL,
     };
     httpd_register_uri_handler(server, &system_options_uri);
+
+    httpd_uri_t patch_set_mining_state_uri = {
+        .uri = "/api/system/mining",
+        .method = HTTP_PATCH,
+        .handler = PATCH_set_mining_state,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(server, &patch_set_mining_state_uri);
+    
+    httpd_uri_t patch_set_mining_state_options = {
+        .uri = "/api/system/mining",
+        .method = HTTP_OPTIONS,
+        .handler = handle_options_request,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(server, &patch_set_mining_state_options);
 
     httpd_uri_t update_post_ota_firmware = {
         .uri = "/api/system/OTA", 

@@ -4,6 +4,13 @@
         <li *ngIf="item.separator" class="menu-separator"></li>
     </ng-container>
 
+    <li id="restart-container">
+        <p-button (click)="disableMining()" id="" label="Disable Mining" severity="primary"></p-button>
+    </li>
+
+    <li id="restart-container">
+        <p-button (click)="enableMining()" id="" label="Enable Mining" severity="primary"></p-button>
+    </li>
 
     <li id="restart-container">
         <p-button (click)="restart()" id="restart" label="Restart" severity="primary"></p-button>

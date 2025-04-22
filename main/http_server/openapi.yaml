@@ -414,6 +414,15 @@ components:
             - 66
       additionalProperties: true
 
+    MiningState:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: Enable or disable mining
+          examples:
+            - true
+
   responses:
     UnauthorizedError:
       description: Unauthorized - Client not in allowed network range
@@ -477,6 +486,29 @@ paths:
       responses:
         '200':
           description: System restart initiated
+        '401':
+          description: Unauthorized - Client not in allowed network range
+        '500':
+          description: Internal server error
+
+  /api/system/mining:
+    patch:
+      summary: Enable or disable mining
+      description: Enables or disables the mining process by disabling the Voltage Regulator for the ASIC
+      operationId: updateMiningState
+      tags:
+        - system
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MiningState'
+      responses:
+        '200':
+          description: Mining status updated successfully
+        '400':
+          description: Invalid request body provided
         '401':
           description: Unauthorized - Client not in allowed network range
         '500':

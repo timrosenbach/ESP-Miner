@@ -35,6 +35,18 @@ export class AppMenuComponent implements OnInit {
         ];
     }
 
+    public enableMining() {
+        this.systemService.updateMiningState('', { enable: true }).subscribe(res => {
+            this.toastr.success('Success!', 'Mining enabled');
+        });
+    }
+
+    public disableMining() {
+        this.systemService.updateMiningState('', { enable: false }).subscribe(res => {
+            this.toastr.success('Success!', 'Mining disabled');
+        });
+    }
+
     public restart() {
         this.systemService.restart().subscribe(res => {
 
