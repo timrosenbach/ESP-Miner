@@ -49,7 +49,8 @@ void ASIC_task(void *pvParameters)
             ESP_LOGI(TAG, "New pool difficulty %lu", next_bm_job->pool_diff);
             GLOBAL_STATE->stratum_difficulty = next_bm_job->pool_diff;
         }
-
+        
+        //(*GLOBAL_STATE->ASIC_functions.send_work_fn)(GLOBAL_STATE, next_bm_job); // send the job to the ASIC
         ASIC_send_work(GLOBAL_STATE, next_bm_job);
 
         // Time to execute the above code is ~0.3ms
