@@ -39,6 +39,7 @@
 #include "theme_api.h"  // Add theme API include
 #include "axe-os/api/system/asic_settings.h"
 #include "http_server.h"
+#include "mining_operations.h"
 
 #define JSON_ALL_STATS_ELEMENT_SIZE 120
 #define JSON_DASHBOARD_STATS_ELEMENT_SIZE 60
@@ -529,6 +530,70 @@ static esp_err_t POST_restart(httpd_req_t * req)
     return ESP_OK;
 }
 
+static esp_err_t PATCH_mining_start(httpd_req_t *req) {
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    // Set CORS headers
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+
+    GlobalState *state = GLOBAL_STATE; 
+    if (!state->mining_disabled) {
+        ESP_LOGI(TAG, "Mining is already enabled.");
+        httpd_resp_set_type(req, "application/json");
+        const char *resp_str = "{\"status\":\"mining_already_enabled\"}";
+        httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
+        return ESP_OK;
+    }
+
+    ESP_LOGI(TAG, "Enabling and starting mining processes via API request.");
+    
+    if (start_mining_processes(state) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start mining processes via API.");
+        state->mining_disabled = true; 
+        state->ASIC_initalized = false;
+
+        httpd_resp_set_type(req, "application/json");
+        const char *err_resp_str = "{\"status\":\"error\", \"message\":\"Failed to start mining. ASIC initialization may have failed.\"}";
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, err_resp_str);
+        return ESP_OK;
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    const char *resp_str = "{\"status\":\"mining_enabled\"}";
+    httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
+
+    return ESP_OK;
+}
+
+static esp_err_t PATCH_mining_stop(httpd_req_t *req) {
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    // Set CORS headers
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+
+    if (!GLOBAL_STATE->mining_disabled) {
+        ESP_LOGI(TAG, "Disabling mining via API request.");
+        GLOBAL_STATE->mining_disabled = true;
+    } else {
+        ESP_LOGI(TAG, "Mining is already disabled.");
+    }
+
+    httpd_resp_set_type(req, "application/json");
+    const char *resp_str = "{\"status\":\"mining_disabled\"}";
+    httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
+
+    return ESP_OK;
+}
 
 /* Simple handler for getting system handler */
 static esp_err_t GET_system_info(httpd_req_t * req)
@@ -1175,6 +1240,38 @@ esp_err_t start_rest_server(void * pvParameters)
         .user_ctx = NULL,
     };
     httpd_register_uri_handler(server, &system_options_uri);
+
+    httpd_uri_t mining_start_uri = {
+        .uri = "/api/mining/start",
+        .method = HTTP_PATCH,
+        .handler = PATCH_mining_start,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &mining_start_uri);
+
+    httpd_uri_t mining_start_options_uri = {
+        .uri = "/api/mining/start",
+        .method = HTTP_OPTIONS,
+        .handler = handle_options_request,
+        .user_ctx = NULL,
+    };
+    httpd_register_uri_handler(server, &mining_start_options_uri);
+
+    httpd_uri_t mining_stop_uri = {
+        .uri = "/api/mining/stop",
+        .method = HTTP_PATCH,
+        .handler = PATCH_mining_stop,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &mining_stop_uri);
+
+    httpd_uri_t mining_stop_options_uri = {
+        .uri = "/api/mining/stop",
+        .method = HTTP_OPTIONS,
+        .handler = handle_options_request,
+        .user_ctx = NULL,
+    };
+    httpd_register_uri_handler(server, &mining_stop_options_uri);
 
     httpd_uri_t update_post_ota_firmware = {
         .uri = "/api/system/OTA", 

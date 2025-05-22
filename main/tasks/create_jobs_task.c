@@ -7,6 +7,7 @@
 #include "esp_system.h"
 #include "mining.h"
 #include "string.h"
+#include "freertos/task.h"
 
 #include "asic.h"
 
@@ -23,6 +24,22 @@ void create_jobs_task(void *pvParameters)
 
     while (1)
     {
+        if (GLOBAL_STATE->mining_disabled)
+        {
+            ESP_LOGI(TAG, "Mining disabled detected. Initiating create_jobs_task shutdown.");
+                // Clear its own handle in GlobalState before exiting
+            if (xTaskGetCurrentTaskHandle() == GLOBAL_STATE->create_jobs_task_handle) {
+                GLOBAL_STATE->create_jobs_task_handle = NULL;
+                ESP_LOGI(TAG, "Cleared create_jobs_task_handle in GlobalState.");
+            } else if (GLOBAL_STATE->create_jobs_task_handle != NULL) {
+                ESP_LOGW(TAG, "create_jobs_task_handle in GlobalState (0x%x) does not match current task (0x%x) during shutdown!",
+                        (unsigned int)GLOBAL_STATE->create_jobs_task_handle, (unsigned int)xTaskGetCurrentTaskHandle());
+            }
+
+            ESP_LOGI(TAG, "create_jobs_task has shut down.");
+            vTaskDelete(NULL);
+        }
+
         mining_notify *mining_notification = (mining_notify *)queue_dequeue(&GLOBAL_STATE->stratum_queue);
         if (mining_notification == NULL) {
             ESP_LOGE(TAG, "Failed to dequeue mining notification");

@@ -9,6 +9,7 @@
 #include "utils.h"
 #include "stratum_task.h"
 #include "asic.h"
+#include "freertos/task.h"
 
 static const char *TAG = "asic_result";
 
@@ -18,6 +19,12 @@ void ASIC_result_task(void *pvParameters)
 
     while (1)
     {
+        if (GLOBAL_STATE->mining_disabled)
+        {
+            ESP_LOGI(TAG, "Mining disabled detected. Initiating ASIC_result_task shutdown.");
+            break;
+        }
+
         //task_result *asic_result = (*GLOBAL_STATE->ASIC_functions.receive_result_fn)(GLOBAL_STATE);
         task_result *asic_result = ASIC_process_work(GLOBAL_STATE);
 
@@ -64,4 +71,16 @@ void ASIC_result_task(void *pvParameters)
 
         SYSTEM_notify_found_nonce(GLOBAL_STATE, nonce_diff, job_id);
     }
+
+    // Cleanup sequence: Clear its own handle in GlobalState before exiting
+    if (xTaskGetCurrentTaskHandle() == GLOBAL_STATE->asic_result_task_handle) {
+        GLOBAL_STATE->asic_result_task_handle = NULL;
+        ESP_LOGI(TAG, "Cleared asic_result_task_handle in GlobalState.");
+    } else if (GLOBAL_STATE->asic_result_task_handle != NULL) {
+        ESP_LOGW(TAG, "asic_result_task_handle in GlobalState (0x%x) does not match current task (0x%x) during shutdown!",
+                 (unsigned int)GLOBAL_STATE->asic_result_task_handle, (unsigned int)xTaskGetCurrentTaskHandle());
+    }
+
+    ESP_LOGI(TAG, "ASIC_result_task has shut down.");
+    vTaskDelete(NULL);
 }

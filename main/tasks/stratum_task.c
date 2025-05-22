@@ -80,9 +80,10 @@ void stratum_close_connection(GlobalState * GLOBAL_STATE)
         return;
     }
 
-    ESP_LOGE(TAG, "Shutting down socket and restarting...");
+    ESP_LOGI(TAG, "Shutting down socket %d and cleaning up...", GLOBAL_STATE->sock);
     shutdown(GLOBAL_STATE->sock, SHUT_RDWR);
     close(GLOBAL_STATE->sock);
+    GLOBAL_STATE->sock = -1;
     cleanQueue(GLOBAL_STATE);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 }
@@ -104,6 +105,19 @@ void stratum_primary_heartbeat(void * pvParameters)
 
     while (1)
     {
+        if (GLOBAL_STATE->mining_disabled) {
+            ESP_LOGI(TAG, "Mining is disabled. Stopping stratum_primary_heartbeat task.");
+
+            if (xTaskGetCurrentTaskHandle() == GLOBAL_STATE->primary_stratum_heartbeat_task_handle) {
+                GLOBAL_STATE->primary_stratum_heartbeat_task_handle = NULL;
+                ESP_LOGI(TAG, "Cleared primary_stratum_heartbeat_task_handle in GlobalState.");
+            } else if (GLOBAL_STATE->primary_stratum_heartbeat_task_handle != NULL) {
+                ESP_LOGW(TAG, "primary_stratum_heartbeat_task_handle in GlobalState (0x%x) does not match current task (0x%x) during shutdown!", (unsigned int)GLOBAL_STATE->primary_stratum_heartbeat_task_handle, (unsigned int)xTaskGetCurrentTaskHandle());
+            }
+
+            vTaskDelete(NULL);
+        }
+
         if (GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback == false) {
             vTaskDelay(10000 / portTICK_PERIOD_MS);
             continue;
@@ -194,10 +208,27 @@ void stratum_task(void * pvParameters)
     int retry_attempts = 0;
     int retry_critical_attempts = 0;
 
-    xTaskCreate(stratum_primary_heartbeat, "stratum primary heartbeat", 8192, pvParameters, 1, NULL);
+    xTaskCreate(stratum_primary_heartbeat, "stratum primary heartbeat", 8192, pvParameters, 1, &GLOBAL_STATE->primary_stratum_heartbeat_task_handle);
 
     ESP_LOGI(TAG, "Opening connection to pool: %s:%d", stratum_url, port);
     while (1) {
+        if (GLOBAL_STATE->mining_disabled) {
+            if (xTaskGetCurrentTaskHandle() == GLOBAL_STATE->stratum_task_handle) {
+                GLOBAL_STATE->stratum_task_handle = NULL;
+                ESP_LOGI(TAG, "Cleared stratum_task_handle in GlobalState.");
+            } else if (GLOBAL_STATE->stratum_task_handle != NULL) {
+                ESP_LOGW(TAG, "stratum_task_handle in GlobalState (0x%x) does not match current task (0x%x) during shutdown!", (unsigned int)GLOBAL_STATE->stratum_task_handle, (unsigned int)xTaskGetCurrentTaskHandle());
+            }
+
+            if (GLOBAL_STATE->primary_stratum_heartbeat_task_handle != NULL) {
+                vTaskDelete(GLOBAL_STATE->primary_stratum_heartbeat_task_handle);
+                GLOBAL_STATE->primary_stratum_heartbeat_task_handle = NULL;
+            }
+
+            ESP_LOGI(TAG, "Terminating stratum_task.");
+            vTaskDelete(NULL);
+        }
+
         if (!is_wifi_connected()) {
             ESP_LOGI(TAG, "WiFi disconnected, attempting to reconnect...");
             vTaskDelay(10000 / portTICK_PERIOD_MS);
@@ -303,6 +334,18 @@ void stratum_task(void * pvParameters)
         GLOBAL_STATE->abandon_work = 0;
 
         while (1) {
+            if (GLOBAL_STATE->mining_disabled) {
+                if (xTaskGetCurrentTaskHandle() == GLOBAL_STATE->stratum_task_handle) {
+                    GLOBAL_STATE->stratum_task_handle = NULL;
+                    ESP_LOGI(TAG, "Cleared stratum_task_handle in GlobalState.");
+                } else if (GLOBAL_STATE->stratum_task_handle != NULL) {
+                    ESP_LOGW(TAG, "stratum_task_handle in GlobalState (0x%x) does not match current task (0x%x) during shutdown!", (unsigned int)GLOBAL_STATE->stratum_task_handle, (unsigned int)xTaskGetCurrentTaskHandle());
+                }
+
+                ESP_LOGI(TAG, "Terminating stratum_task.");
+                vTaskDelete(NULL);
+            }
+
             char * line = STRATUM_V1_receive_jsonrpc_line(GLOBAL_STATE->sock);
             if (!line) {
                 ESP_LOGE(TAG, "Failed to receive JSON-RPC line, reconnecting...");

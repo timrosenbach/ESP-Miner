@@ -12,6 +12,7 @@
 #include "work_queue.h"
 #include "device_config.h"
 #include "display.h"
+#include "freertos/task.h"
 
 #define STRATUM_USER CONFIG_STRATUM_USER
 #define FALLBACK_STRATUM_USER CONFIG_FALLBACK_STRATUM_USER
@@ -108,6 +109,14 @@ typedef struct
 
     bool ASIC_initalized;
     bool psram_is_available;
+    bool mining_disabled;
+
+    TaskHandle_t stratum_task_handle;
+    TaskHandle_t create_jobs_task_handle;
+    TaskHandle_t asic_task_handle;
+    TaskHandle_t asic_result_task_handle;
+    TaskHandle_t statistics_task_handle;
+    TaskHandle_t primary_stratum_heartbeat_task_handle;
 } GlobalState;
 
 #endif /* GLOBAL_STATE_H_ */

@@ -36,6 +36,12 @@ void ASIC_task(void *pvParameters)
 
     while (1)
     {
+        if (GLOBAL_STATE->mining_disabled)
+        {
+            ESP_LOGI(TAG, "Mining disabled detected. Initiating ASIC task shutdown.");
+            break;
+        }
+
         bm_job *next_bm_job = (bm_job *)queue_dequeue(&GLOBAL_STATE->ASIC_jobs_queue);
 
         if (next_bm_job->pool_diff != GLOBAL_STATE->stratum_difficulty)
@@ -44,7 +50,6 @@ void ASIC_task(void *pvParameters)
             GLOBAL_STATE->stratum_difficulty = next_bm_job->pool_diff;
         }
 
-        //(*GLOBAL_STATE->ASIC_functions.send_work_fn)(GLOBAL_STATE, next_bm_job); // send the job to the ASIC
         ASIC_send_work(GLOBAL_STATE, next_bm_job);
 
         // Time to execute the above code is ~0.3ms
@@ -52,4 +57,31 @@ void ASIC_task(void *pvParameters)
         //vTaskDelay((asic_job_frequency_ms - 0.3) / portTICK_PERIOD_MS);
         xSemaphoreTake(GLOBAL_STATE->ASIC_TASK_MODULE.semaphore, asic_job_frequency_ms / portTICK_PERIOD_MS);
     }
+
+    // Cleanup sequence
+    ESP_LOGI(TAG, "ASIC_task performing cleanup...");
+    if (GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs != NULL) {
+        free(GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs);
+        GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs = NULL;
+    }
+    if (GLOBAL_STATE->valid_jobs != NULL) {
+        free(GLOBAL_STATE->valid_jobs);
+        GLOBAL_STATE->valid_jobs = NULL;
+    }
+    if (GLOBAL_STATE->ASIC_TASK_MODULE.semaphore != NULL) {
+        vSemaphoreDelete(GLOBAL_STATE->ASIC_TASK_MODULE.semaphore);
+        GLOBAL_STATE->ASIC_TASK_MODULE.semaphore = NULL;
+    }
+
+    // Clear its own handle in GlobalState before exiting
+    if (xTaskGetCurrentTaskHandle() == GLOBAL_STATE->asic_task_handle) {
+        GLOBAL_STATE->asic_task_handle = NULL;
+        ESP_LOGI(TAG, "Cleared asic_task_handle in GlobalState.");
+    } else if (GLOBAL_STATE->asic_task_handle != NULL) {
+        ESP_LOGW(TAG, "asic_task_handle in GlobalState (0x%x) does not match current task (0x%x) during shutdown!",
+                 (unsigned int)GLOBAL_STATE->asic_task_handle, (unsigned int)xTaskGetCurrentTaskHandle());
+    }
+
+    ESP_LOGI(TAG, "ASIC_task has shut down.");
+    vTaskDelete(NULL);
 }

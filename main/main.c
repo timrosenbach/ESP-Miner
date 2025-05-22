@@ -21,13 +21,21 @@
 #include "asic.h"
 #include "driver/gpio.h"
 #include "device_config.h"
+#include "mining_operations.h"
 
 static GlobalState GLOBAL_STATE = {
     .extranonce_str = NULL, 
     .extranonce_2_len = 0, 
     .abandon_work = 0, 
     .version_mask = 0,
-    .ASIC_initalized = false
+    .ASIC_initalized = false,
+    .mining_disabled = false,
+    .stratum_task_handle = NULL,
+    .primary_stratum_heartbeat_task_handle = NULL,
+    .create_jobs_task_handle = NULL,
+    .asic_task_handle = NULL,
+    .asic_result_task_handle = NULL,
+    .statistics_task_handle = NULL
 };
 
 static const char * TAG = "bitaxe";
@@ -99,25 +107,11 @@ void app_main(void)
 
     wifi_softap_off();
 
-    queue_init(&GLOBAL_STATE.stratum_queue);
-    queue_init(&GLOBAL_STATE.ASIC_jobs_queue);
-
     SERIAL_init();
 
-    if (ASIC_init(&GLOBAL_STATE) == 0) {
-        GLOBAL_STATE.SYSTEM_MODULE.asic_status = "Chip count 0";
-        ESP_LOGE(TAG, "Chip count 0");
+    if (start_mining_processes(&GLOBAL_STATE) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to start mining processes during initial setup. Mining will be disabled.");
+        GLOBAL_STATE.mining_disabled = true;
         return;
     }
-
-    SERIAL_set_baud(ASIC_set_max_baud(&GLOBAL_STATE));
-    SERIAL_clear_buffer();
-
-    GLOBAL_STATE.ASIC_initalized = true;
-
-    xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL);
-    xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 10, NULL);
-    xTaskCreate(ASIC_task, "asic", 8192, (void *) &GLOBAL_STATE, 10, NULL);
-    xTaskCreate(ASIC_result_task, "asic result", 8192, (void *) &GLOBAL_STATE, 15, NULL);
-    xTaskCreate(statistics_task, "statistics", 8192, (void *) &GLOBAL_STATE, 3, NULL);
 }

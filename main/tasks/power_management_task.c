@@ -27,7 +27,12 @@
 #define TPS546_THROTTLE_TEMP 105.0
 #define TPS546_MAX_TEMP 145.0
 
+// Define safe minimums for when mining is disabled
+#define SAFE_MIN_ASIC_FREQ 56.25f
+#define SAFE_MIN_FAN_PERCENT 30
+
 static const char * TAG = "power_management";
+static bool in_safe_shutdown_mode = false;
 
 double pid_input = 0.0;
 double pid_output = 0.0;
@@ -66,6 +71,65 @@ void POWER_MANAGEMENT_task(void * pvParameters)
     uint16_t last_asic_frequency = power_management->frequency_value;
     
     while (1) {
+        if (GLOBAL_STATE->mining_disabled) {
+            if (!in_safe_shutdown_mode) {
+                ESP_LOGI(TAG, "Mining disabled. Initiating safe shutdown of ASICs.");
+
+                // Set frequency to safe minimum
+                ESP_LOGI(TAG, "Setting ASIC frequency to safe minimum: %.1f MHz", SAFE_MIN_ASIC_FREQ);
+                if (ASIC_set_frequency(GLOBAL_STATE, SAFE_MIN_ASIC_FREQ)) {
+                    power_management->frequency_value = SAFE_MIN_ASIC_FREQ;
+                }
+                last_asic_frequency = (uint16_t)SAFE_MIN_ASIC_FREQ;
+
+                // Let frequency stabilize
+                vTaskDelay(pdMS_TO_TICKS(50));
+
+                // Set VCore to 0
+                ESP_LOGI(TAG, "Setting VCore to 0V.");
+                VCORE_set_voltage(0.0f, GLOBAL_STATE);
+                last_core_voltage = 0;
+
+                // Wait for 50ms to allow VCore to stabilize
+                vTaskDelay(pdMS_TO_TICKS(50));
+
+                // Set fan to safe minimum, overriding PID/manual NVS fan settings
+                ESP_LOGI(TAG, "Setting fan to safe minimum: %d%%", SAFE_MIN_FAN_PERCENT);
+                power_management->fan_perc = SAFE_MIN_FAN_PERCENT;
+                Thermal_set_fan_percent(GLOBAL_STATE->DEVICE_CONFIG, (float)SAFE_MIN_FAN_PERCENT / 100.0);
+                
+                in_safe_shutdown_mode = true;
+            }
+
+            // Minimal operations while in safe shutdown mode
+            power_management->voltage = Power_get_input_voltage(GLOBAL_STATE);
+            power_management->power = Power_get_power(GLOBAL_STATE);
+            power_management->fan_rpm = Thermal_get_fan_speed(GLOBAL_STATE->DEVICE_CONFIG);
+            power_management->chip_temp_avg = Thermal_get_chip_temp(GLOBAL_STATE);
+            power_management->vr_temp = Power_get_vreg_temp(GLOBAL_STATE);
+
+            vTaskDelay(POLL_RATE / portTICK_PERIOD_MS);
+            continue;
+        } else {
+            if (in_safe_shutdown_mode) {
+                ESP_LOGI(TAG, "Mining re-enabled. Restoring ASIC power settings from NVS.");
+
+                uint16_t core_voltage_nvs = nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE);
+                ESP_LOGI(TAG, "Restoring VCore voltage to %umV", core_voltage_nvs);
+                VCORE_set_voltage((double)core_voltage_nvs / 1000.0, GLOBAL_STATE);
+                last_core_voltage = core_voltage_nvs;
+
+                uint16_t asic_frequency_nvs = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
+                ESP_LOGI(TAG, "Restoring ASIC frequency to %uMHz", asic_frequency_nvs);
+                if (ASIC_set_frequency(GLOBAL_STATE, (float)asic_frequency_nvs)) {
+                    power_management->frequency_value = (float)asic_frequency_nvs;
+                }
+                last_asic_frequency = asic_frequency_nvs;
+                
+                in_safe_shutdown_mode = false;
+                ESP_LOGI(TAG, "ASIC power settings restored. Resuming normal power management.");
+            }
+        }
 
         // Refresh PID setpoint from NVS in case it was changed via API
         pid_setPoint = (double)nvs_config_get_u16(NVS_CONFIG_TEMP_TARGET, pid_setPoint);

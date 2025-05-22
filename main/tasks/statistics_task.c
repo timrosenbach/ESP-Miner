@@ -123,6 +123,22 @@ void statistics_task(void * pvParameters)
 
         TickType_t taskWakeTime = xTaskGetTickCount();
         while (1) {
+            if (GLOBAL_STATE->mining_disabled)
+            {
+                ESP_LOGI(TAG, "Mining disabled detected. Initiating statistics_task shutdown.");
+                // Clear its own handle in GlobalState before exiting
+                if (xTaskGetCurrentTaskHandle() == GLOBAL_STATE->statistics_task_handle) {
+                    GLOBAL_STATE->statistics_task_handle = NULL;
+                    ESP_LOGI(TAG, "Cleared statistics_task_handle in GlobalState.");
+                } else if (GLOBAL_STATE->statistics_task_handle != NULL) {
+                    ESP_LOGW(TAG, "statistics_task_handle in GlobalState (0x%x) does not match current task (0x%x) during shutdown!",
+                            (unsigned int)GLOBAL_STATE->statistics_task_handle, (unsigned int)xTaskGetCurrentTaskHandle());
+                }
+
+                ESP_LOGI(TAG, "statistics_task has shut down.");
+                vTaskDelete(NULL);
+            }
+
             int8_t wifiRSSI = -90;
             get_wifi_current_rssi(&wifiRSSI);
 
@@ -147,6 +163,22 @@ void statistics_task(void * pvParameters)
     } else {
         ESP_LOGI(TAG, "Disabled!");
         while (1) {
+            if (GLOBAL_STATE->mining_disabled)
+            {
+                ESP_LOGI(TAG, "Mining disabled detected. Initiating statistics_task shutdown.");
+                // Clear its own handle in GlobalState before exiting
+                if (xTaskGetCurrentTaskHandle() == GLOBAL_STATE->statistics_task_handle) {
+                    GLOBAL_STATE->statistics_task_handle = NULL;
+                    ESP_LOGI(TAG, "Cleared statistics_task_handle in GlobalState.");
+                } else if (GLOBAL_STATE->statistics_task_handle != NULL) {
+                    ESP_LOGW(TAG, "statistics_task_handle in GlobalState (0x%x) does not match current task (0x%x) during shutdown!",
+                            (unsigned int)GLOBAL_STATE->statistics_task_handle, (unsigned int)xTaskGetCurrentTaskHandle());
+                }
+
+                ESP_LOGI(TAG, "statistics_task has shut down.");
+                vTaskDelete(NULL);
+            }
+
             vTaskDelay(DEFAULT_POLL_RATE / portTICK_PERIOD_MS);
         }
     }
